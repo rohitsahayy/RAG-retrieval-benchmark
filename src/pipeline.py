@@ -96,11 +96,19 @@ def build_vectorstore(chunks:list[Document])->FAISS:
 def retrieve(
         vectorstore:FAISS,
         query:str,
-        k:int = 5
+        k:int = 5,
+        strategy:str = "naive"
 ) -> tuple[list[Document],float]:
     
     start = time.time()
-    results = vectorstore.similarity_search(query,k=k)
+
+    if strategy=="naive":
+        results = vectorstore.similarity_search(query,k=k)
+    elif strategy=="mmr":
+        results = vectorstore.max_marginal_relevance_search(query,k=k)
+    else:
+        raise ValueError(f"Unknown Strategy {strategy}")
+    
     latency_ms = round((time.time()-start)*1000,2)
 
     print(f"[RETRIEVE] Query : {query[:50]}...")
