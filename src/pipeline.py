@@ -1,10 +1,12 @@
 import time
 from pathlib import Path
+import os
 
 from langchain_community.document_loaders import PyPDFLoader,TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_groq import ChatGroq
 from langchain.schema import Document
 from dotenv import load_dotenv
 
@@ -114,6 +116,39 @@ def retrieve(
     print(f"[RETRIEVE] Query : {query[:50]}...")
     print(f"[RETRIEVE] Got {len(results)} chunks in {latency_ms}ms")
     return results,latency_ms
+
+# -----------------------------------------------------------
+# STEP 4: Generate Answer
+# -----------------------------------------------------------
+def generate_answer(
+        query:str,
+        retrieved_docs:tuple[list[Document],float]
+)->str:
+
+    """
+    Takes a query + retrieved chunks → generates an answer using Groq.
+    """
+    context = "\n\n".join(doc.page_content for doc in retrieved_docs)
+
+    prompt = f""" Answer the question using ONLY the context provided below.
+    If the answer is not in the context, say "Not found in document."
+
+    context : {context}
+
+    question : {query}
+
+    Answer:
+    """
+    
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",
+        api_key=os.getenv("GROQ_API_KEY")
+    )
+
+    response = llm.invoke(prompt)
+    return response.content
+
+
 
 # -----------------------------------------------------------
 # QUICK SANITY TEST

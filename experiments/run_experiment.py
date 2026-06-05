@@ -5,7 +5,8 @@ import mlflow
 
 sys.path.append(os.path.join(os.path.dirname(__file__),".."))
 
-from src.pipeline import load_document,chunk,build_vectorstore,retrieve
+from src.pipeline import load_document,chunk,build_vectorstore,retrieve,generate_answer
+from src.evaluation.metrics import evaluate_rag
 
 # -----------------------------------------------------------
 # WHAT IS MLFLOW DOING HERE?
@@ -23,8 +24,6 @@ TEST_QUERIES = [
     "What is the attention mechanism?",
     "How does multi-head attention work?",
     "What are the limitations of this approach?",
-    "Explain the encoder decoder structure",
-    "What datasets were used for evaluation?"
 ]
 
 def run_experiment(
@@ -60,11 +59,19 @@ def run_experiment(
 
         # Run all test queries, collect latencies
         latencies = []
+        all_contexts = []
+        all_answers = []
 
         for query in TEST_QUERIES:
             results,latency_ms = retrieve(store,query,k=top_k,strategy=retrieval_strategy)
             latencies.append(latency_ms)
 
+            answer = generate_answer(query,results)
+
+            context_texts = [doc.page_content for doc in results]
+            all_contexts.append(context_texts)
+            all_answers.append(answer)
+            
         # Summary metrics across all queries
         avg_latency = round(sum(latencies) / len(latencies), 2)
         max_latency = round(max(latencies), 2)
@@ -74,11 +81,26 @@ def run_experiment(
         mlflow.log_metric("max_latency_ms", max_latency)
         mlflow.log_metric("min_latency_ms", min_latency)
 
+        # --- RUN RAGAS EVALUATION ---
+        print(f"\n[RAGAS] Evaluating quality scores...")
+        ragas_scores = evaluate_rag(
+            queries=TEST_QUERIES,
+            retrieved_contexts=all_contexts,
+            generated_answers=all_answers
+        )
+
+        # log RAGAS metrics :
+        mlflow.log_metric("context_precision", ragas_scores["context_precision"])
+        mlflow.log_metric("faithfulness",      ragas_scores["faithfulness"])
+        mlflow.log_metric("answer_relevancy",  ragas_scores["answer_relevancy"])
+
         print(f"\n{'='*50}")
         print(f"Run: {run_name}")
         print(f"Chunks: {len(chunks)}")
         print(f"Avg latency: {avg_latency}ms")
         print(f"Max latency: {max_latency}ms")
+        print(f"Context Precision:{ragas_scores['context_precision']}")
+        print(f"Faithfulness:     {ragas_scores['faithfulness']}")
         print(f"{'='*50}\n")
 
 if __name__ =="__main__":
