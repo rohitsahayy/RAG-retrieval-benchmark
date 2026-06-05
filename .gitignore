@@ -6,3 +6,4 @@ mlruns/
 .DS_Store
 *.egg-info/
 EOF
+data/
