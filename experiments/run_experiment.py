@@ -12,7 +12,7 @@ from src.evaluation.metrics import evaluate_rag
 import dagshub
 dagshub.init(
     repo_owner="rohit.sahay0660",
-    repo_name="rag-retrieval_bench",
+    repo_name="RAG-retrieval-benchmark",
     mlflow=True
 )
 
