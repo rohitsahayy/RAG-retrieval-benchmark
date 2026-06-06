@@ -1,6 +1,7 @@
 import time
 from pathlib import Path
 import os
+from typing import Union
 
 from langchain_community.document_loaders import PyPDFLoader,TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -9,6 +10,11 @@ from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain.schema import Document
 from dotenv import load_dotenv
+
+# -------- Qdrant vector DB -----
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance,VectorParams
 
 load_dotenv()
 
@@ -85,6 +91,53 @@ def build_vectorstore(chunks:list[Document])->FAISS:
     return vectorstore
 
 
+def build_qdrant_vectorstore(
+        chunks:list[Document],
+        collection_name:str = "rag_bench"
+        )->QdrantVectorStore:
+    
+    """
+    Builds a Qdrant vectorstore with HNSW indexing.
+    
+    HNSW = Hierarchical Navigable Small World
+    A graph-based index that finds approximate nearest neighbours
+    in O(log n) instead of FAISS's O(n) brute force.
+    """
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"},
+    )
+
+    client = QdrantClient(host="localhost",port=6333)
+
+    # Delete collection if exists — fresh start per experiment
+    if client.collection_exists(collection_name):
+        client.delete_collection(collection_name)
+
+    # Create collection with HNSW index
+    # Qdrant uses HNSW by default — vector size 384 matches MiniLM
+    client.create_collection(
+        collection_name=collection_name,
+        vectors_config=VectorParams(
+            size=384,        # MiniLM embedding dimension
+            distance=Distance.COSINE
+        )
+    )
+
+    print(f"[QDRANT] Created collection '{collection_name}' with HNSW index")
+
+    start = time.time()
+    vectorstore = QdrantVectorStore.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        url="http://localhost:6333",
+        collection_name=collection_name,
+    )
+    elapsed = round((time.time() - start) * 1000, 2)
+    print(f"[QDRANT] Indexed {len(chunks)} chunks in {elapsed}ms")
+
+    return vectorstore
+
 # -----------------------------------------------------------
 # STEP 4: RETRIEVE
 # -----------------------------------------------------------
@@ -96,7 +149,7 @@ def build_vectorstore(chunks:list[Document])->FAISS:
 # Returns: (results, latency_ms)
 
 def retrieve(
-        vectorstore:FAISS,
+        vectorstore:Union[FAISS, QdrantVectorStore],
         query:str,
         k:int = 5,
         strategy:str = "naive"
@@ -147,8 +200,6 @@ def generate_answer(
 
     response = llm.invoke(prompt)
     return response.content
-
-
 
 # -----------------------------------------------------------
 # QUICK SANITY TEST

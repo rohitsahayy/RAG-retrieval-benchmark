@@ -5,7 +5,7 @@ import mlflow
 
 sys.path.append(os.path.join(os.path.dirname(__file__),".."))
 
-from src.pipeline import load_document,chunk,build_vectorstore,retrieve,generate_answer
+from src.pipeline import load_document,chunk,build_vectorstore,build_qdrant_vectorstore,retrieve,generate_answer
 from src.evaluation.metrics import evaluate_rag
 
 # dagshub connection 
@@ -38,12 +38,13 @@ def run_experiment(
         chunk_size:int,
         chunk_overlap:int,
         retrieval_strategy :str,
+        vector_store: str = "faiss",
         top_k:int =5
 ):
     # Each call to this function = one MLflow run
     # run_name makes it readable in the UI
 
-    run_name = f"chunk{chunk_size}_overlap{chunk_overlap}_strategy{retrieval_strategy}"
+    run_name = f"chunk{chunk_size}_overlap{chunk_overlap}_strategy{retrieval_strategy}_{vector_store}"
 
     with mlflow.start_run(run_name=run_name):
         # --- LOG PARAMETERS ---
@@ -53,6 +54,7 @@ def run_experiment(
         mlflow.log_param("chunk_size",chunk_size)
         mlflow.log_param("chunk_overlap",chunk_overlap)
         mlflow.log_param("retrieval_strategy",retrieval_strategy)
+        mlflow.log_param("vector_store", vector_store)  
         mlflow.log_param("top_k",top_k)
         mlflow.log_param("embedding_model","all-MiniLM-L6-v2")
         mlflow.log_param("document",DOCUMENT_PATH)
@@ -60,7 +62,11 @@ def run_experiment(
         # RUN Pipeline
         docs = load_document(DOCUMENT_PATH)
         chunks = chunk(docs,chunk_size,chunk_overlap)
-        store = build_vectorstore(chunks)
+
+        if vector_store=="faiss":
+            store = build_vectorstore(chunks)
+        elif vector_store=="qdrant":
+            store = build_qdrant_vectorstore(chunks)
 
         #LOG metrics
         mlflow.log_metric("num_chunks",len(chunks))
@@ -114,7 +120,7 @@ def run_experiment(
 if __name__ =="__main__":
     mlflow.set_experiment("rag-retrieval-bench")
 
-    # We'll run 3 experiments back to back
+    # We'll run 5 experiments back to back
     # Each one changes ONE variable so results are comparable
 
     run_experiment(
@@ -134,3 +140,15 @@ if __name__ =="__main__":
         chunk_overlap=50,
         retrieval_strategy="mmr"
     )
+
+    # chunk 512 + overlap 50 + retrieve strategy "naive" + VDB Qdrant
+    run_experiment(chunk_size=512, 
+                   chunk_overlap=50,
+                   retrieval_strategy="naive", 
+                   vector_store="qdrant")
+
+    # chunk 512 + overlap 50 + retrieve strategy "mmr" + VDB Qdrant
+    run_experiment(chunk_size=512, 
+                   chunk_overlap=50,
+                   retrieval_strategy="mmr",   
+                   vector_store="qdrant")
