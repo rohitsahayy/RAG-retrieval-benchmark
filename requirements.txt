@@ -12,3 +12,4 @@ tiktoken==0.9.0
 python-dotenv==1.1.0
 pandas==2.2.3
 numpy==2.2.4
+dagshub

@@ -8,6 +8,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__),".."))
 from src.pipeline import load_document,chunk,build_vectorstore,retrieve,generate_answer
 from src.evaluation.metrics import evaluate_rag
 
+# dagshub connection 
+import dagshub
+dagshub.init(
+    repo_owner="rohit.sahay0660",
+    repo_name="rag-retrieval_bench",
+    mlflow=True
+)
+
 # -----------------------------------------------------------
 # WHAT IS MLFLOW DOING HERE?
 #
